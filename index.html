@@ -182,7 +182,6 @@
             </button>
         </div>
 
-        <!-- Backlog List Page -->
         <div id="page-list" class="page hidden">
             <div class="flex flex-wrap items-center justify-between gap-3 mb-4 px-2">
                 <div class="flex items-center gap-3">
@@ -226,7 +225,6 @@
             </div>
         </div>
 
-        <!-- QMSV Mini Collection Page -->
         <div id="page-qmsv" class="page hidden">
             <div class="flex flex-wrap items-center justify-between gap-3 mb-4 px-2">
                 <div class="flex items-center gap-3">
@@ -264,11 +262,9 @@
             </div>
         </div>
 
-        <!-- Add Form Page -->
         <div id="page-add" class="page hidden">
             <div class="glass-panel p-8 rounded-lg max-w-lg mx-auto relative">
                 <h2 id="form-title" class="text-xl mb-8 border-l-4 pl-4 uppercase tracking-tighter">Registry</h2>
-                
                 <form id="add-kit-form" class="space-y-6">
                     <div id="brand-field">
                         <label id="brand-label" class="block text-xs text-gray-500 mb-2 uppercase">BRAND</label>
@@ -300,7 +296,6 @@
             </div>
         </div>
 
-        <!-- Edit Modal -->
         <div id="edit-modal" class="fixed inset-0 hidden flex items-center justify-center z-[100] p-4">
             <div class="glass-panel p-8 rounded-lg max-w-lg w-full relative">
                 <h2 class="text-xl text-blue-600 mb-8 border-l-4 border-blue-600 pl-4 uppercase tracking-widest">Update Data</h2>
@@ -342,7 +337,6 @@
         </div>
     </div>
 
-    <!-- Firebase SDKs -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { 
@@ -368,14 +362,26 @@
         const db = getFirestore(app);
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-        // Auth Logic
+        // Auth Logic - Wrapped to ensure it handles popup blocker environment
         window.handleGoogleLogin = async () => {
             const provider = new GoogleAuthProvider();
+            // Force prompt to ensure the account picker shows
+            provider.setCustomParameters({ prompt: 'select_account' });
+            
             try {
-                await signInWithPopup(auth, provider);
+                const result = await signInWithPopup(auth, provider);
+                if (result.user) {
+                    showMessage(`Logged in as ${result.user.displayName}`);
+                }
             } catch (error) {
                 console.error("Login Error:", error);
-                if (typeof showMessage === 'function') showMessage("Login Failed");
+                if (error.code === 'auth/popup-blocked') {
+                    alert("Please allow popups for this site to sign in with Google.");
+                } else if (error.code === 'auth/cancelled-popup-request') {
+                    // Handled internally
+                } else {
+                    showMessage("Login Failed: " + error.message);
+                }
             }
         };
 
@@ -383,17 +389,21 @@
             try {
                 await signOut(auth);
                 await signInAnonymously(auth);
+                showMessage("Signed out.");
             } catch (error) {
                 console.error("Logout Error:", error);
             }
         };
 
-        // RULE 3: Auth Setup
         const initAuth = async () => {
-            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                await signInWithCustomToken(auth, __initial_auth_token);
-            } else {
-                if (!auth.currentUser) await signInAnonymously(auth);
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    if (!auth.currentUser) await signInAnonymously(auth);
+                }
+            } catch (e) {
+                console.warn("Auth initialization warning", e);
             }
         };
         initAuth();
@@ -406,28 +416,37 @@
                 loginBtn.classList.add('hidden');
                 userProfile.classList.remove('hidden');
                 
-                // FIX: Check for displayName existence before splitting
                 const displayName = user.displayName || 'PILOT';
                 const firstName = displayName.split(' ')[0].toUpperCase();
                 
                 document.getElementById('user-photo').src = user.photoURL || 'https://via.placeholder.com/32';
                 document.getElementById('user-name').innerText = firstName;
                 
-                // Save profile to Firestore (RULE 1)
+                // Save profile to Firestore
                 const userDocRef = doc(db, 'artifacts', appId, 'users', user.uid, 'profile', 'info');
                 setDoc(userDocRef, {
                     name: displayName,
                     email: user.email,
                     photo: user.photoURL,
                     lastSeen: new Date().toISOString()
-                }, { merge: true });
-                
-                if (typeof showMessage === 'function') showMessage(`Welcome back, ${firstName}`);
+                }, { merge: true }).catch(err => console.error("Profile save error:", err));
             } else {
                 loginBtn.classList.remove('hidden');
                 userProfile.classList.add('hidden');
             }
+        }, (error) => {
+            console.error("Auth State Error:", error);
         });
+
+        // Global message function
+        window.showMessage = (text) => {
+            const box = document.getElementById('msg-box');
+            if (!box) return;
+            const textEl = document.getElementById('msg-text');
+            if (textEl) textEl.innerText = `[SYSTEM]: ${text}`;
+            box.style.transform = 'translateY(0)';
+            setTimeout(() => { box.style.transform = 'translateY(150%)'; }, 3000);
+        }
     </script>
 
     <script>
@@ -447,24 +466,29 @@
         function showPage(pageId) {
             currentActivePage = pageId;
             document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
-            document.getElementById(`page-${pageId}`).classList.remove('hidden');
+            const target = document.getElementById(`page-${pageId}`);
+            if (target) target.classList.remove('hidden');
             
             const title = document.getElementById('main-title');
             const navB = document.getElementById('nav-backlog');
             const navQ = document.getElementById('nav-qmsv');
 
-            navB.classList.remove('active-nav-blue');
-            navQ.classList.remove('active-nav-purple');
+            if (navB) navB.classList.remove('active-nav-blue');
+            if (navQ) navQ.classList.remove('active-nav-purple');
 
             if (pageId === 'list') {
-                title.innerText = "Backlog Command";
-                title.className = "text-3xl md:text-5xl font-bold mb-2 text-blue-900";
-                navB.classList.add('active-nav-blue');
+                if (title) {
+                    title.innerText = "Backlog Command";
+                    title.className = "text-3xl md:text-5xl font-bold mb-2 text-blue-900";
+                }
+                if (navB) navB.classList.add('active-nav-blue');
                 renderBacklog();
             } else if (pageId === 'qmsv') {
-                title.innerText = "QMSV Archive";
-                title.className = "text-3xl md:text-5xl font-bold mb-2 text-purple-900";
-                navQ.classList.add('active-nav-purple');
+                if (title) {
+                    title.innerText = "QMSV Archive";
+                    title.className = "text-3xl md:text-5xl font-bold mb-2 text-purple-900";
+                }
+                if (navQ) navQ.classList.add('active-nav-purple');
                 renderQMSV();
             }
         }
@@ -585,7 +609,7 @@
             list.sort((a, b) => String(a[prop] || a['series']).toLowerCase().localeCompare(String(b[prop] || b['series']).toLowerCase()));
             saveAll();
             type === 'backlog' ? renderBacklog() : renderQMSV();
-            showMessage(`Sorted ${type} by ${prop}`);
+            if (window.showMessage) window.showMessage(`Sorted ${type} by ${prop}`);
         }
 
         function openEdit(type, index) {
@@ -623,7 +647,7 @@
             closeEditModal();
             renderBacklog();
             renderQMSV();
-            showMessage("Record updated.");
+            if (window.showMessage) window.showMessage("Record updated.");
         });
 
         function deleteItem(type, index) {
@@ -632,7 +656,7 @@
                 else qmsv.splice(index, 1);
                 saveAll();
                 type === 'backlog' ? renderBacklog() : renderQMSV();
-                showMessage("Removed.");
+                if (window.showMessage) window.showMessage("Removed.");
             }
         }
 
@@ -650,21 +674,13 @@
             if (currentAddType === 'backlog') backlog.push(newItem);
             else qmsv.push(newItem);
             saveAll();
-            showMessage("Registry confirmed.");
+            if (window.showMessage) window.showMessage("Registry confirmed.");
             showPage(currentAddType === 'backlog' ? 'list' : 'qmsv');
         });
 
         function saveAll() {
             localStorage.setItem('gunpla_backlog', JSON.stringify(backlog));
             localStorage.setItem('qmsv_collection', JSON.stringify(qmsv));
-        }
-
-        function showMessage(text) {
-            const box = document.getElementById('msg-box');
-            if (!box) return;
-            document.getElementById('msg-text').innerText = `[SYSTEM]: ${text}`;
-            box.style.transform = 'translateY(0)';
-            setTimeout(() => { box.style.transform = 'translateY(150%)'; }, 2000);
         }
 
         window.onload = () => showPage('list');
