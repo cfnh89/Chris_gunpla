@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Gunpla Inventory Command</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- SheetJS for Excel Import/Export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Roboto+Mono:wght@300;400&display=swap');
@@ -43,44 +42,11 @@
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
         }
 
-        .btn-primary {
-            background: transparent;
-            border: 1px solid var(--gundam-blue);
-            color: var(--gundam-blue);
-            transition: all 0.3s ease;
-        }
+        .btn-primary { background: transparent; border: 1px solid var(--gundam-blue); color: var(--gundam-blue); transition: all 0.2s; }
+        .btn-primary:hover, .active-nav-blue { background: var(--gundam-blue); color: white; }
 
-        .btn-primary:hover, .active-nav-blue {
-            background: var(--gundam-blue);
-            color: white;
-            box-shadow: 0 0 15px rgba(0, 86, 179, 0.3);
-        }
-
-        .btn-secondary {
-            background: transparent;
-            border: 1px solid var(--gundam-red);
-            color: var(--gundam-red);
-            transition: all 0.3s ease;
-        }
-
-        .btn-secondary:hover {
-            background: var(--gundam-red);
-            color: white;
-            box-shadow: 0 0 15px rgba(217, 4, 41, 0.3);
-        }
-
-        .btn-qmsv {
-            background: transparent;
-            border: 1px solid var(--qmsv-purple);
-            color: var(--qmsv-purple);
-            transition: all 0.3s ease;
-        }
-
-        .btn-qmsv:hover, .active-nav-purple {
-            background: var(--qmsv-purple);
-            color: white;
-            box-shadow: 0 0 15px rgba(98, 0, 234, 0.3);
-        }
+        .btn-qmsv { background: transparent; border: 1px solid var(--qmsv-purple); color: var(--qmsv-purple); transition: all 0.2s; }
+        .btn-qmsv:hover, .active-nav-purple { background: var(--qmsv-purple); color: white; }
 
         .status-badge {
             font-size: 0.7rem;
@@ -91,200 +57,192 @@
             border: 1px solid var(--gundam-blue);
         }
 
-        .corner-accent {
-            position: absolute;
-            width: 20px;
-            height: 20px;
-            border: 2px solid var(--gundam-blue);
-        }
-        .top-left { top: 0; left: 0; border-right: 0; border-bottom: 0; }
-        .bottom-right { bottom: 0; right: 0; border-left: 0; border-top: 0; }
-
-        #msg-box {
-            z-index: 200;
-        }
+        .sort-header { cursor: pointer; transition: color 0.2s; }
+        .sort-header:hover { color: var(--gundam-blue); }
         
-        @keyframes spin { 100% { transform: rotate(360deg); } }
+        .action-btn {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            transition: transform 0.1s;
+        }
+        .action-btn:active { transform: scale(0.9); }
+        .edit-btn { border: 1px solid var(--gundam-blue); color: var(--gundam-blue); }
+        .edit-btn:hover { background: var(--gundam-blue); color: white; }
+        .del-btn { border: 1px solid var(--gundam-red); color: var(--gundam-red); }
+        .del-btn:hover { background: var(--gundam-red); color: white; }
+
+        #msg-box { z-index: 200; }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
 
-    <div id="app" class="max-w-4xl mx-auto relative pb-20">
-        <!-- Header -->
-        <header class="mb-12 text-center relative py-6">
-            <div class="corner-accent top-left"></div>
-            <div class="corner-accent bottom-right"></div>
-            <h1 id="main-title" class="text-3xl md:text-5xl font-bold mb-2 text-blue-900">Backlog Command</h1>
-            <p id="sub-title" class="text-gray-400 text-sm tracking-widest uppercase">Cloud Sync Enabled</p>
+    <div id="app" class="max-w-5xl mx-auto relative pb-20">
+        <header class="mb-8 text-center relative py-6">
+            <h1 class="text-3xl md:text-5xl font-bold mb-2 text-blue-900">Backlog Command</h1>
+            <p class="text-gray-400 text-sm tracking-widest uppercase">Inventory System v2.2 (Auto-Sync)</p>
         </header>
 
-        <!-- Top Sync Bar -->
-        <div class="glass-panel p-4 rounded mb-8 flex flex-wrap items-center justify-between gap-4 border-dashed border-blue-300">
+        <div class="glass-panel p-4 rounded mb-8 flex flex-wrap items-center justify-between gap-4 border-dashed border-blue-200">
             <div class="flex items-center gap-2">
                 <div id="sync-status-dot" class="w-3 h-3 rounded-full bg-gray-400"></div>
                 <span id="sync-status-text" class="text-[10px] font-bold text-gray-500 uppercase">Connecting...</span>
             </div>
             <div class="flex gap-2">
-                <button onclick="openSyncModal()" class="text-[10px] bg-blue-900 text-white px-4 py-2 rounded font-bold hover:bg-blue-700 transition-colors">
-                    CLOUD SYNC / CLUSTERS
-                </button>
+                <span id="auto-sync-indicator" class="hidden text-[9px] bg-green-100 text-green-700 px-2 py-1 rounded font-bold self-center">AUTO-SYNC ENABLED</span>
+                <button onclick="openSyncModal()" class="text-[10px] bg-blue-900 text-white px-4 py-2 rounded font-bold">MANAGE CLUSTERS</button>
             </div>
         </div>
 
-        <!-- Navigation -->
-        <div id="main-nav" class="flex flex-col md:flex-row gap-3 justify-center mb-12">
-            <button id="nav-backlog" onclick="showPage('list')" class="nav-btn btn-primary px-6 py-3 rounded-sm flex items-center justify-center gap-2 flex-1 active-nav-blue">
-                BACKLOG
-            </button>
-            <button id="nav-qmsv" onclick="showPage('qmsv')" class="nav-btn btn-qmsv px-6 py-3 rounded-sm flex items-center justify-center gap-2 flex-1">
-                QMSV MINI
-            </button>
+        <div class="flex flex-col md:flex-row gap-3 justify-center mb-8">
+            <button id="nav-backlog" onclick="showPage('list')" class="nav-btn btn-primary px-6 py-3 rounded flex-1 active-nav-blue">BACKLOG</button>
+            <button id="nav-qmsv" onclick="showPage('qmsv')" class="nav-btn btn-qmsv px-6 py-3 rounded flex-1">QMSV MINI</button>
         </div>
 
-        <!-- Pages -->
+        <!-- Page: Backlog -->
         <div id="page-list" class="page">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
-                <h2 class="text-xl text-blue-800">Operational Backlog</h2>
-                <div class="flex flex-wrap gap-2">
-                    <button onclick="downloadTemplate('backlog')" class="px-3 py-2 border border-blue-200 text-blue-600 rounded text-[10px] font-bold hover:bg-blue-50 transition-colors uppercase">Download Template</button>
-                    <label class="px-3 py-2 border border-blue-200 text-blue-600 rounded text-[10px] font-bold hover:bg-blue-50 transition-colors cursor-pointer uppercase">
-                        Import Excel
-                        <input type="file" class="hidden" accept=".xlsx, .xls" onchange="importExcel(event, 'backlog')">
-                    </label>
-                    <button onclick="showAddForm('backlog')" class="btn-secondary px-4 py-2 rounded text-xs font-bold">+ NEW ENTRY</button>
-                </div>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl text-blue-800 uppercase tracking-tighter">Operational Backlog</h2>
+                <button onclick="showAddForm('backlog')" class="btn-primary px-4 py-2 rounded text-xs font-bold">+ ADD NEW KIT</button>
             </div>
-            <div class="glass-panel p-6 rounded-lg overflow-x-auto">
-                <table class="w-full text-left">
-                    <thead class="text-xs text-gray-500 border-b border-gray-200">
+            <div class="glass-panel rounded-lg overflow-x-auto p-4 mb-8">
+                <table class="w-full text-left min-w-[600px]">
+                    <thead class="text-[10px] text-gray-400 border-b">
                         <tr>
-                            <th class="pb-4">BRAND</th>
-                            <th class="pb-4">MODEL NAME</th>
-                            <th class="pb-4">GRADE</th>
-                            <th class="pb-4">QTY</th>
-                            <th class="pb-4">PRICE</th>
-                            <th class="pb-4">ACTIONS</th>
+                            <th class="pb-3 px-2">#</th>
+                            <th class="pb-3 px-2 sort-header" onclick="sortData('backlog', 'brand')">BRAND ↕</th>
+                            <th class="pb-3 px-2 sort-header" onclick="sortData('backlog', 'modelName')">MODEL NAME ↕</th>
+                            <th class="pb-3 px-2 sort-header" onclick="sortData('backlog', 'size')">GRADE ↕</th>
+                            <th class="pb-3 px-2 sort-header text-center" onclick="sortData('backlog', 'units')">QTY ↕</th>
+                            <th class="pb-3 px-2 sort-header text-right" onclick="sortData('backlog', 'price')">PRICE ↕</th>
+                            <th class="pb-3 px-2 text-right">ACTIONS</th>
                         </tr>
                     </thead>
                     <tbody id="backlog-table-body"></tbody>
+                    <tfoot class="bg-gray-50 font-bold text-xs border-t-2 border-blue-200">
+                        <tr>
+                            <td colspan="4" class="p-4 text-right uppercase">Total Inventory Metrics:</td>
+                            <td id="backlog-total-qty" class="p-4 text-center text-blue-700">-</td>
+                            <td id="backlog-total-price" class="p-4 text-right text-blue-900">-</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
                 </table>
+            </div>
+
+            <div class="flex flex-wrap gap-4 items-center justify-center pt-4 border-t border-gray-100">
+                <button onclick="downloadTemplate('backlog')" class="text-[10px] text-blue-600 font-bold hover:underline">DOWNLOAD BACKLOG TEMPLATE (.XLSX)</button>
+                <div class="h-4 w-px bg-gray-300"></div>
+                <label class="text-[10px] text-blue-600 font-bold hover:underline cursor-pointer">
+                    IMPORT BACKLOG FROM EXCEL
+                    <input type="file" class="hidden" accept=".xlsx, .xls" onchange="importExcel(event, 'backlog')">
+                </label>
             </div>
         </div>
 
+        <!-- Page: QMSV -->
         <div id="page-qmsv" class="page hidden">
-            <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
-                <h2 class="text-xl text-purple-800">QMSV Mini Archive</h2>
-                <div class="flex flex-wrap gap-2">
-                    <button onclick="downloadTemplate('qmsv')" class="px-3 py-2 border border-purple-200 text-purple-600 rounded text-[10px] font-bold hover:bg-purple-50 transition-colors uppercase">Download Template</button>
-                    <label class="px-3 py-2 border border-purple-200 text-purple-600 rounded text-[10px] font-bold hover:bg-purple-50 transition-colors cursor-pointer uppercase">
-                        Import Excel
-                        <input type="file" class="hidden" accept=".xlsx, .xls" onchange="importExcel(event, 'qmsv')">
-                    </label>
-                    <button onclick="showAddForm('qmsv')" class="btn-qmsv px-4 py-2 rounded text-xs font-bold">+ ADD FIGURE</button>
-                </div>
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl text-purple-800 uppercase tracking-tighter">QMSV Mini Archive</h2>
+                <button onclick="showAddForm('qmsv')" class="btn-qmsv px-4 py-2 rounded text-xs font-bold">+ ADD NEW FIGURE</button>
             </div>
-            <div class="glass-panel p-6 rounded-lg overflow-x-auto border-purple-200">
-                <table class="w-full text-left">
-                    <thead class="text-xs text-gray-500 border-b border-gray-200">
+            <div class="glass-panel rounded-lg overflow-x-auto p-4 border-purple-100 mb-8">
+                <table class="w-full text-left min-w-[500px]">
+                    <thead class="text-[10px] text-gray-400 border-b">
                         <tr>
-                            <th class="pb-4">SERIES</th>
-                            <th class="pb-4">NAME</th>
-                            <th class="pb-4">QTY</th>
-                            <th class="pb-4">ACTIONS</th>
+                            <th class="pb-3 px-2">#</th>
+                            <th class="pb-3 px-2 sort-header" onclick="sortData('qmsv', 'brand')">SERIES ↕</th>
+                            <th class="pb-3 px-2 sort-header" onclick="sortData('qmsv', 'modelName')">NAME ↕</th>
+                            <th class="pb-3 px-2 sort-header text-center" onclick="sortData('qmsv', 'units')">QTY ↕</th>
+                            <th class="pb-3 px-2 text-right">ACTIONS</th>
                         </tr>
                     </thead>
                     <tbody id="qmsv-table-body"></tbody>
+                    <tfoot class="bg-purple-50 font-bold text-xs border-t-2 border-purple-200">
+                        <tr>
+                            <td colspan="3" class="p-4 text-right uppercase">Total Figure Count:</td>
+                            <td id="qmsv-total-qty" class="p-4 text-center text-purple-700">-</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
                 </table>
+            </div>
+
+            <div class="flex flex-wrap gap-4 items-center justify-center pt-4 border-t border-gray-100">
+                <button onclick="downloadTemplate('qmsv')" class="text-[10px] text-purple-600 font-bold hover:underline">DOWNLOAD QMSV TEMPLATE (.XLSX)</button>
+                <div class="h-4 w-px bg-gray-300"></div>
+                <label class="text-[10px] text-purple-600 font-bold hover:underline cursor-pointer">
+                    IMPORT QMSV FROM EXCEL
+                    <input type="file" class="hidden" accept=".xlsx, .xls" onchange="importExcel(event, 'qmsv')">
+                </label>
             </div>
         </div>
 
-        <!-- Add Form -->
+        <!-- Form Modal -->
         <div id="page-add" class="page hidden">
-            <div class="glass-panel p-8 rounded-lg max-w-lg mx-auto">
-                <h2 id="form-title" class="text-xl mb-8 border-l-4 pl-4 uppercase">Registry</h2>
-                <form id="add-kit-form" class="space-y-4">
-                    <input type="text" id="brand" placeholder="Brand / Series" required class="w-full p-3 rounded bg-gray-100">
-                    <input type="text" id="modelName" placeholder="Model Name" required class="w-full p-3 rounded bg-gray-100">
-                    <div class="grid grid-cols-2 gap-4">
-                        <input type="text" id="size" placeholder="Grade / Type" required class="w-full p-3 rounded bg-gray-100">
-                        <input type="number" id="units" placeholder="Qty" required min="1" value="1" class="w-full p-3 rounded bg-gray-100">
+            <div class="glass-panel p-8 rounded-lg max-w-lg mx-auto border-t-4 border-blue-900">
+                <h2 id="form-title" class="text-xl mb-6">REGISTRY COMMAND</h2>
+                <form id="kit-form" class="space-y-4">
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold text-gray-400 uppercase">Brand or Series</label>
+                        <input type="text" id="brand" required class="w-full p-3 rounded bg-gray-50 border focus:ring-2 focus:ring-blue-900 outline-none">
                     </div>
-                    <input type="number" step="0.01" id="price" placeholder="Price (RM)" class="w-full p-3 rounded bg-gray-100">
-                    <div class="pt-4 flex gap-3">
-                        <button type="submit" id="submit-btn" class="flex-1 py-3 rounded font-bold text-white bg-blue-900">CONFIRM</button>
-                        <button type="button" onclick="cancelAdd()" class="px-6 py-3 border border-gray-300 text-gray-500">CANCEL</button>
+                    <div class="space-y-1">
+                        <label class="text-[10px] font-bold text-gray-400 uppercase">Item Name</label>
+                        <input type="text" id="modelName" required class="w-full p-3 rounded bg-gray-50 border focus:ring-2 focus:ring-blue-900 outline-none">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="space-y-1" id="size-container">
+                            <label class="text-[10px] font-bold text-gray-400 uppercase">Grade / Size</label>
+                            <input type="text" id="size" class="w-full p-3 rounded bg-gray-50 border focus:ring-2 focus:ring-blue-900 outline-none">
+                        </div>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-bold text-gray-400 uppercase">Quantity</label>
+                            <input type="number" id="units" required min="1" class="w-full p-3 rounded bg-gray-50 border focus:ring-2 focus:ring-blue-900 outline-none">
+                        </div>
+                    </div>
+                    <div class="space-y-1" id="price-container">
+                        <label class="text-[10px] font-bold text-gray-400 uppercase">Unit Price (RM)</label>
+                        <input type="number" step="0.01" id="price" class="w-full p-3 rounded bg-gray-50 border focus:ring-2 focus:ring-blue-900 outline-none">
+                    </div>
+                    <div class="pt-6 flex gap-3">
+                        <button type="submit" class="flex-1 py-3 bg-blue-900 text-white font-bold rounded hover:bg-blue-800 transition-colors">SAVE RECORD</button>
+                        <button type="button" onclick="cancelAdd()" class="px-6 py-3 border rounded text-gray-500 hover:bg-gray-50">CANCEL</button>
                     </div>
                 </form>
             </div>
         </div>
 
         <!-- Sync Modal -->
-        <div id="sync-modal" class="fixed inset-0 hidden bg-black/80 backdrop-blur-md flex items-center justify-center z-[150] p-4 overflow-y-auto">
-            <div class="glass-panel p-6 md:p-8 rounded-lg max-w-md w-full my-auto">
-                <h2 class="text-xl mb-2 text-blue-900 font-bold">CLOUD SYNC COMMAND</h2>
-                
-                <div id="github-setup-warning" class="mb-4 p-3 bg-red-50 border border-red-200 rounded text-[10px] text-red-700 font-bold leading-tight hidden">
-                    ⚠ GITHUB DEPLOYMENT DETECTED:<br>
-                    You must enter your Firebase Keys in the code for this to work on your own website.
+        <div id="sync-modal" class="fixed inset-0 hidden bg-black/50 backdrop-blur-sm flex items-center justify-center z-[150] p-4">
+            <div class="glass-panel p-6 rounded-lg max-w-sm w-full">
+                <h2 class="text-xl mb-4 text-blue-900 font-bold">STORAGE CLUSTER</h2>
+                <p class="text-[9px] text-gray-500 mb-4 uppercase">Auto-sync updates the cloud after every change when active.</p>
+                <input type="text" id="custom-alias" placeholder="Enter Cluster Name" class="w-full p-3 mb-3 border rounded text-xs outline-none focus:border-blue-900">
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="setAlias()" class="bg-blue-600 text-white py-2 rounded text-xs hover:bg-blue-700">LINK ALIAS</button>
+                    <button onclick="uploadToCloud()" class="bg-blue-900 text-white py-2 rounded text-xs hover:bg-blue-800">FORCE UPLOAD</button>
                 </div>
-
-                <p class="text-[10px] text-gray-400 mb-6 uppercase tracking-wider">Storage Protocol: Secure Sync</p>
-                
-                <!-- Section 1: Memory Alias -->
-                <div class="mb-6 space-y-3">
-                    <div class="flex justify-between items-end">
-                        <label class="text-[9px] text-blue-600 font-bold uppercase">Step 1: Set Your Memorable Alias</label>
-                        <span id="alias-status" class="text-[8px] text-gray-400">Not set</span>
-                    </div>
-                    <div class="flex gap-2">
-                        <input type="text" id="custom-alias" placeholder="e.g. MyCollection" class="flex-1 p-3 rounded bg-blue-50 border border-blue-100 text-xs font-bold">
-                        <button id="set-alias-btn" onclick="setAlias()" class="bg-blue-600 text-white px-4 py-2 rounded text-[10px] font-bold">SET</button>
-                    </div>
-                    <p class="text-[8px] text-gray-400 leading-tight italic">Use this simple name on other devices to retrieve your data instantly.</p>
-                </div>
-
-                <div class="h-px bg-gray-100 w-full mb-6"></div>
-
-                <!-- Section 2: Actions -->
-                <div class="space-y-3">
-                    <button id="upload-btn" onclick="uploadToCloud()" class="w-full py-4 bg-blue-900 text-white rounded font-bold text-xs shadow-lg hover:bg-blue-800 flex items-center justify-center gap-2">
-                        <span>↑</span> UPLOAD TO CLOUD
-                    </button>
-                    
-                    <div class="py-2 flex items-center gap-2">
-                        <div class="h-px bg-gray-200 flex-1"></div>
-                        <span class="text-[9px] text-gray-400">OR DOWNLOAD</span>
-                        <div class="h-px bg-gray-200 flex-1"></div>
-                    </div>
-
-                    <input type="text" id="import-id" placeholder="Enter Alias or Device ID" class="w-full p-3 rounded bg-gray-100 text-xs border border-gray-200">
-                    <button id="download-btn" onclick="downloadFromCloud()" class="w-full py-4 border-2 border-blue-900 text-blue-900 rounded font-bold text-xs hover:bg-blue-50">
-                        <span>↓</span> DOWNLOAD DATA
-                    </button>
-                </div>
-
-                <div class="mt-8 p-3 bg-gray-50 rounded border border-gray-100">
-                    <p class="text-[8px] text-gray-400 mb-1 font-bold">DEBUG INFO: RAW DEVICE ID</p>
-                    <code id="display-uid" class="block text-[8px] break-all text-gray-300">Fetching...</code>
-                </div>
-                
-                <button onclick="closeSyncModal()" class="w-full mt-6 text-[10px] text-gray-400 font-bold uppercase tracking-widest hover:text-red-500">Close Interface</button>
+                <button onclick="downloadFromCloud()" class="w-full mt-2 py-3 border-2 border-blue-900 text-blue-900 rounded font-bold text-xs hover:bg-blue-50">DOWNLOAD DATA</button>
+                <button onclick="closeSyncModal()" class="w-full mt-4 text-[10px] text-gray-400 uppercase font-bold text-center">Close Interface</button>
             </div>
         </div>
 
-        <!-- Messages -->
-        <div id="msg-box" class="fixed bottom-8 right-8 glass-panel p-4 border-l-4 border-blue-600 shadow-xl transform translate-y-32 transition-transform duration-300 pointer-events-none">
+        <div id="msg-box" class="fixed bottom-8 right-8 glass-panel p-4 border-l-4 border-blue-600 shadow-xl transform translate-y-32 transition-transform pointer-events-none">
             <p id="msg-text" class="text-xs font-bold text-blue-900"></p>
         </div>
     </div>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, getDoc, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // --- GITHUB DEPLOYMENT CONFIGURATION ---
-        const manualConfig = {
+        const config = {
             apiKey: "AIzaSyAbCTpYn1WJBhvvq9pSP8-YWrwOlvOIezg",
             authDomain: "gunpla-tracker-d5916.firebaseapp.com",
             projectId: "gunpla-tracker-d5916",
@@ -293,340 +251,254 @@
             appId: "1:589732856630:web:44e0036375e29d5775a997"
         };
 
-        const getFirebaseConfig = () => {
-            if (typeof __firebase_config !== 'undefined' && __firebase_config !== null) {
-                try {
-                    return JSON.parse(__firebase_config);
-                } catch (e) {
-                    console.error("Failed to parse environment config", e);
-                }
-            }
-            return manualConfig;
-        };
-
-        const activeConfig = getFirebaseConfig();
-        const isGithubNotSet = activeConfig.apiKey === "YOUR_API_KEY";
-        
-        if (isGithubNotSet && window.location.hostname !== 'localhost') {
-            const warning = document.getElementById('github-setup-warning');
-            if (warning) warning.classList.remove('hidden');
-        }
-
-        const app = initializeApp(activeConfig);
+        const app = initializeApp(config);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'github-deployment';
-
         let currentUser = null;
 
-        async function fetchWithRetry(fn, maxRetries = 5) {
-            for (let i = 0; i < maxRetries; i++) {
-                try { return await fn(); }
-                catch (err) {
-                    if (i === maxRetries - 1) throw err;
-                    await new Promise(r => setTimeout(r, Math.pow(2, i) * 1000));
-                }
-            }
-        }
+        onAuthStateChanged(auth, u => {
+            currentUser = u;
+            const dot = document.getElementById('sync-status-dot');
+            const text = document.getElementById('sync-status-text');
+            const indicator = document.getElementById('auto-sync-indicator');
+            if(dot) dot.className = u ? "w-3 h-3 rounded-full bg-green-500" : "w-3 h-3 rounded-full bg-gray-400";
+            if(text) text.innerText = u ? "Cloud Active" : "Offline";
+            if(indicator) indicator.classList.toggle('hidden', !u);
+        });
+        signInAnonymously(auth);
 
-        window.showMessage = (text) => {
-            const box = document.getElementById('msg-box');
-            document.getElementById('msg-text').innerText = `[SYSTEM]: ${text}`;
-            box.style.transform = 'translateY(0)';
-            setTimeout(() => { box.style.transform = 'translateY(150%)'; }, 3000);
-        };
-
-        window.setAlias = async () => {
-            if (!currentUser) {
-                window.showMessage("Sync still connecting. Please wait...");
-                return;
-            }
-            const alias = document.getElementById('custom-alias').value.trim().toLowerCase();
-            if (!alias || alias.length < 3) {
-                window.showMessage("Alias must be at least 3 characters.");
-                return;
-            }
-
-            window.showMessage("Setting Alias...");
+        window.uploadToCloud = async (silent = false) => {
+            if (!currentUser) return;
             try {
-                const aliasDoc = doc(db, 'artifacts', appId, 'public', 'data', 'aliases', alias);
-                await setDoc(aliasDoc, { uid: currentUser.uid });
-                
-                localStorage.setItem('gunpla_alias', alias);
-                document.getElementById('alias-status').innerText = `Active: ${alias}`;
-                window.showMessage(`Alias "${alias}" linked successfully!`);
+                const data = { 
+                    backlog: JSON.parse(localStorage.getItem('gunpla_backlog')) || [], 
+                    qmsv: JSON.parse(localStorage.getItem('qmsv_collection')) || [] 
+                };
+                await setDoc(doc(db, 'artifacts', 'inventory-app', 'users', currentUser.uid, 'data', 'main'), data);
+                if(!silent) window.showMessage("Cloud Update Success");
             } catch (e) {
-                console.error(e);
-                window.showMessage("Alias setup failed. Make sure Firestore is enabled.");
-            }
-        };
-
-        window.uploadToCloud = async () => {
-            if (!currentUser) { 
-                window.showMessage("Sync connecting. One moment..."); 
-                return; 
-            }
-            
-            window.showMessage("Uploading to cloud...");
-            try {
-                const backlog = JSON.parse(localStorage.getItem('gunpla_backlog')) || [];
-                const qmsv = JSON.parse(localStorage.getItem('qmsv_collection')) || [];
-                
-                const userDoc = doc(db, 'artifacts', appId, 'users', currentUser.uid, 'inventory', 'main');
-                await fetchWithRetry(() => setDoc(userDoc, {
-                    backlog,
-                    qmsv,
-                    lastSync: new Date().toISOString()
-                }));
-                window.showMessage("Data secure in cloud.");
-            } catch (e) {
-                console.error(e);
-                window.showMessage("Upload failed. Check Rules in Firebase.");
+                if(!silent) window.showMessage("Cloud sync failed");
             }
         };
 
         window.downloadFromCloud = async () => {
-            if (!currentUser) {
-                window.showMessage("Sync connecting...");
-                return;
+            if (!currentUser) return;
+            const alias = document.getElementById('custom-alias').value.trim().toLowerCase();
+            let uid = currentUser.uid;
+            if (alias) {
+                const snap = await getDoc(doc(db, 'artifacts', 'inventory-app', 'public', 'aliases', alias));
+                if (snap.exists()) uid = snap.data().uid;
             }
-            let targetIdOrAlias = document.getElementById('import-id').value.trim().toLowerCase();
-            if (!targetIdOrAlias) {
-                targetIdOrAlias = currentUser?.uid;
-            }
-            if (!targetIdOrAlias) return;
-
-            window.showMessage("Searching for data...");
-            try {
-                let finalUid = targetIdOrAlias;
-
-                const aliasDoc = doc(db, 'artifacts', appId, 'public', 'data', 'aliases', targetIdOrAlias);
-                const aliasSnap = await getDoc(aliasDoc);
-                if (aliasSnap.exists()) {
-                    finalUid = aliasSnap.data().uid;
-                }
-
-                const userDoc = doc(db, 'artifacts', appId, 'users', finalUid, 'inventory', 'main');
-                const snap = await getDoc(userDoc);
-                
-                if (snap.exists()) {
-                    const data = snap.data();
-                    localStorage.setItem('gunpla_backlog', JSON.stringify(data.backlog || []));
-                    localStorage.setItem('qmsv_collection', JSON.stringify(data.qmsv || []));
-                    window.showMessage("Sync Successful! Reloading...");
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    window.showMessage("No data found for this ID/Alias.");
-                }
-            } catch (e) {
-                console.error(e);
-                window.showMessage("Sync failed.");
+            const snap = await getDoc(doc(db, 'artifacts', 'inventory-app', 'users', uid, 'data', 'main'));
+            if (snap.exists()) {
+                localStorage.setItem('gunpla_backlog', JSON.stringify(snap.data().backlog));
+                localStorage.setItem('qmsv_collection', JSON.stringify(snap.data().qmsv));
+                location.reload();
+            } else {
+                window.showMessage("No data found for this cluster");
             }
         };
 
-        onAuthStateChanged(auth, (user) => {
-            currentUser = user;
-            const dot = document.getElementById('sync-status-dot');
-            const text = document.getElementById('sync-status-text');
-            const uid = document.getElementById('display-uid');
-            const aliasLabel = document.getElementById('alias-status');
-
-            if (user) {
-                dot.className = "w-3 h-3 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]";
-                text.innerText = "Cloud Online";
-                uid.innerText = user.uid;
-                
-                const localAlias = localStorage.getItem('gunpla_alias');
-                if (localAlias) {
-                    aliasLabel.innerText = `Active: ${localAlias}`;
-                    document.getElementById('custom-alias').value = localAlias;
-                }
-            } else {
-                dot.className = "w-3 h-3 rounded-full bg-red-500";
-                text.innerText = "Offline";
-                uid.innerText = isGithubNotSet ? "Missing Keys" : "Connecting...";
+        window.setAlias = async () => {
+            const alias = document.getElementById('custom-alias').value.trim().toLowerCase();
+            if (alias && currentUser) {
+                await setDoc(doc(db, 'artifacts', 'inventory-app', 'public', 'aliases', alias), { uid: currentUser.uid });
+                window.showMessage("Alias Linked");
             }
-        });
-
-        async function startAuth() {
-            if (isGithubNotSet && window.location.hostname !== 'localhost') return;
-            
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (e) {
-                console.error("Auth Error:", e);
-                window.showMessage("Cloud connection failed.");
-            }
-        }
-        startAuth();
+        };
     </script>
 
     <script>
-        // Standard App Logic
         let backlog = JSON.parse(localStorage.getItem('gunpla_backlog')) || [];
         let qmsv = JSON.parse(localStorage.getItem('qmsv_collection')) || [];
-        let currentAddType = 'backlog';
+        let currentType = 'backlog';
+        let editIndex = -1;
+        let sortConfig = { key: '', direction: 'asc' };
 
-        function showPage(pageId) {
-            document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
-            document.getElementById(`page-${pageId}`).classList.remove('hidden');
-            document.getElementById('nav-backlog').classList.toggle('active-nav-blue', pageId === 'list');
-            document.getElementById('nav-qmsv').classList.toggle('active-nav-purple', pageId === 'qmsv');
-            if (pageId === 'list') renderBacklog();
-            if (pageId === 'qmsv') renderQMSV();
+        function showMessage(text) {
+            const box = document.getElementById('msg-box');
+            document.getElementById('msg-text').innerText = text;
+            box.style.transform = 'translateY(0)';
+            setTimeout(() => box.style.transform = 'translateY(150%)', 3000);
         }
 
-        function showAddForm(type) {
-            currentAddType = type;
-            document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+        function showPage(p) {
+            document.querySelectorAll('.page').forEach(el => el.classList.add('hidden'));
+            document.getElementById(`page-${p}`).classList.remove('hidden');
+            document.getElementById('nav-backlog').classList.toggle('active-nav-blue', p === 'list');
+            document.getElementById('nav-qmsv').classList.toggle('active-nav-purple', p === 'qmsv');
+            if (p === 'list') renderBacklog();
+            if (p === 'qmsv') renderQMSV();
+        }
+
+        function showAddForm(type, index = -1) {
+            currentType = type;
+            editIndex = index;
+            document.querySelectorAll('.page').forEach(el => el.classList.add('hidden'));
             document.getElementById('page-add').classList.remove('hidden');
-            document.getElementById('form-title').innerText = type === 'backlog' ? 'New Backlog Entry' : 'New QMSV Figure';
             
-            // For QMSV, hide the price field and repurpose grade field
-            const priceField = document.getElementById('price');
-            const sizeField = document.getElementById('size');
+            const title = index === -1 ? `ADD NEW ${type.toUpperCase()}` : `EDIT RECORD`;
+            document.getElementById('form-title').innerText = title;
             
-            if (type === 'backlog') {
-                priceField.style.display = 'block';
-                sizeField.placeholder = "Grade / Size";
+            document.getElementById('price-container').style.display = type === 'backlog' ? 'block' : 'none';
+            document.getElementById('size-container').style.display = type === 'backlog' ? 'block' : 'none';
+
+            if (index !== -1) {
+                const data = type === 'backlog' ? backlog[index] : qmsv[index];
+                document.getElementById('brand').value = data.brand;
+                document.getElementById('modelName').value = data.modelName;
+                document.getElementById('size').value = data.size || '';
+                document.getElementById('units').value = data.units;
+                document.getElementById('price').value = data.price || 0;
             } else {
-                priceField.style.display = 'none';
-                sizeField.style.display = 'none'; // Hide size/type for QMSV
+                document.getElementById('kit-form').reset();
             }
         }
 
-        function cancelAdd() { 
-            document.getElementById('size').style.display = 'block';
-            showPage(currentAddType === 'backlog' ? 'list' : 'qmsv'); 
+        function cancelAdd() { showPage(currentType === 'backlog' ? 'list' : 'qmsv'); }
+
+        function saveAndSync() {
+            localStorage.setItem('gunpla_backlog', JSON.stringify(backlog));
+            localStorage.setItem('qmsv_collection', JSON.stringify(qmsv));
+            if (window.uploadToCloud) window.uploadToCloud(true);
         }
 
         function renderBacklog() {
             const tbody = document.getElementById('backlog-table-body');
             tbody.innerHTML = '';
-            backlog.forEach((item, index) => {
+            let totalQty = 0, totalPrice = 0;
+
+            backlog.forEach((item, idx) => {
+                totalQty += parseInt(item.units);
+                totalPrice += (parseFloat(item.price) * parseInt(item.units));
+                
                 tbody.innerHTML += `
-                    <tr class="border-b border-gray-100 text-xs">
-                        <td class="py-4 text-gray-500">${item.brand}</td>
-                        <td class="py-4 font-bold uppercase">${item.modelName}</td>
-                        <td class="py-4"><span class="status-badge">${item.size}</span></td>
-                        <td class="py-4 font-bold text-blue-700">${item.units}</td>
-                        <td class="py-4">RM ${parseFloat(item.price || 0).toFixed(2)}</td>
-                        <td class="py-4"><button onclick="deleteItem('backlog', ${index})" class="text-red-400 hover:font-bold">×</button></td>
+                    <tr class="border-b hover:bg-gray-50 text-[11px]">
+                        <td class="p-2 text-gray-400 font-mono">${idx + 1}</td>
+                        <td class="p-2 font-bold text-gray-600">${item.brand}</td>
+                        <td class="p-2 uppercase font-bold text-blue-900">${item.modelName}</td>
+                        <td class="p-2"><span class="status-badge">${item.size}</span></td>
+                        <td class="p-2 text-center font-bold">${item.units}</td>
+                        <td class="p-2 text-right">RM ${parseFloat(item.price).toFixed(2)}</td>
+                        <td class="p-2 text-right flex justify-end gap-2">
+                            <button onclick="showAddForm('backlog', ${idx})" class="action-btn edit-btn">✎ EDIT</button>
+                            <button onclick="deleteEntry('backlog', ${idx})" class="action-btn del-btn">✕ DEL</button>
+                        </td>
                     </tr>`;
             });
+            document.getElementById('backlog-total-qty').innerText = totalQty;
+            document.getElementById('backlog-total-price').innerText = `RM ${totalPrice.toFixed(2)}`;
         }
 
         function renderQMSV() {
             const tbody = document.getElementById('qmsv-table-body');
             tbody.innerHTML = '';
-            qmsv.forEach((item, index) => {
+            let totalQty = 0;
+
+            qmsv.forEach((item, idx) => {
+                totalQty += parseInt(item.units);
                 tbody.innerHTML += `
-                    <tr class="border-b border-gray-100 text-xs">
-                        <td class="py-4 text-purple-400">${item.brand}</td>
-                        <td class="py-4 font-bold uppercase">${item.modelName}</td>
-                        <td class="py-4 font-bold text-purple-700">${item.units}</td>
-                        <td class="py-4"><button onclick="deleteItem('qmsv', ${index})" class="text-red-400 hover:font-bold">×</button></td>
+                    <tr class="border-b hover:bg-purple-50 text-[11px]">
+                        <td class="p-2 text-gray-400 font-mono">${idx + 1}</td>
+                        <td class="p-2 font-bold text-purple-600">${item.brand}</td>
+                        <td class="p-2 uppercase font-bold text-purple-900">${item.modelName}</td>
+                        <td class="p-2 text-center font-bold">${item.units}</td>
+                        <td class="p-2 text-right flex justify-end gap-2">
+                            <button onclick="showAddForm('qmsv', ${idx})" class="action-btn edit-btn border-purple-500 text-purple-500 hover:bg-purple-500 hover:text-white">✎ EDIT</button>
+                            <button onclick="deleteEntry('qmsv', ${idx})" class="action-btn del-btn">✕ DEL</button>
+                        </td>
                     </tr>`;
             });
+            document.getElementById('qmsv-total-qty').innerText = totalQty;
         }
 
-        function deleteItem(type, index) {
-            if (confirm("Confirm Deletion?")) {
-                if (type === 'backlog') backlog.splice(index, 1);
-                else qmsv.splice(index, 1);
-                saveLocally();
-                showPage(type === 'backlog' ? 'list' : 'qmsv');
+        function sortData(type, key) {
+            const list = type === 'backlog' ? backlog : qmsv;
+            const direction = (sortConfig.key === key && sortConfig.direction === 'asc') ? 'desc' : 'asc';
+            sortConfig = { key, direction };
+
+            list.sort((a, b) => {
+                let valA = a[key]; let valB = b[key];
+                if (key === 'units' || key === 'price') {
+                    valA = parseFloat(valA) || 0; valB = parseFloat(valB) || 0;
+                } else {
+                    valA = valA.toString().toLowerCase(); valB = valB.toString().toLowerCase();
+                }
+                if (valA < valB) return direction === 'asc' ? -1 : 1;
+                if (valA > valB) return direction === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            if (type === 'backlog') renderBacklog(); else renderQMSV();
+            showMessage(`Sorting by ${key}`);
+        }
+
+        function deleteEntry(type, idx) {
+            if (confirm("Permanently delete this entry?")) {
+                if (type === 'backlog') backlog.splice(idx, 1); else qmsv.splice(idx, 1);
+                saveAndSync();
+                if (type === 'backlog') renderBacklog(); else renderQMSV();
             }
         }
 
-        document.getElementById('add-kit-form').addEventListener('submit', (e) => {
+        document.getElementById('kit-form').addEventListener('submit', e => {
             e.preventDefault();
-            const newItem = {
+            const data = {
                 brand: document.getElementById('brand').value,
                 modelName: document.getElementById('modelName').value,
-                size: currentAddType === 'backlog' ? document.getElementById('size').value : 'N/A',
+                size: document.getElementById('size').value || 'N/A',
                 units: parseInt(document.getElementById('units').value),
                 price: parseFloat(document.getElementById('price').value) || 0
             };
-            if (currentAddType === 'backlog') backlog.push(newItem);
-            else qmsv.push(newItem);
-            saveLocally();
-            
-            document.getElementById('size').style.display = 'block'; // Reset visibility
-            showPage(currentAddType === 'backlog' ? 'list' : 'qmsv');
-            e.target.reset();
+
+            const list = currentType === 'backlog' ? backlog : qmsv;
+            if (editIndex === -1) list.push(data); else list[editIndex] = data;
+
+            saveAndSync();
+            cancelAdd();
+            showMessage("Record Saved & Synced");
         });
 
-        function saveLocally() {
-            localStorage.setItem('gunpla_backlog', JSON.stringify(backlog));
-            localStorage.setItem('qmsv_collection', JSON.stringify(qmsv));
-        }
-
-        // Excel Operations
         function downloadTemplate(type) {
             const headers = type === 'backlog' 
                 ? [["BRAND", "MODEL NAME", "GRADE", "QTY", "PRICE"]] 
                 : [["SERIES", "NAME", "QTY"]];
-            
             const wb = XLSX.utils.book_new();
             const ws = XLSX.utils.aoa_to_sheet(headers);
             XLSX.utils.book_append_sheet(wb, ws, "Template");
             XLSX.writeFile(wb, `Gunpla_Template_${type}.xlsx`);
+            showMessage("Template Downloaded");
         }
 
         function importExcel(event, type) {
             const file = event.target.files[0];
-            if (!file) return;
-
             const reader = new FileReader();
-            reader.onload = (e) => {
+            reader.onload = e => {
                 try {
                     const data = new Uint8Array(e.target.result);
                     const workbook = XLSX.read(data, { type: 'array' });
-                    const sheetName = workbook.SheetNames[0];
-                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName]);
-
-                    let importCount = 0;
+                    const json = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
                     json.forEach(row => {
-                        if (type === 'backlog') {
-                            backlog.push({
-                                brand: row["BRAND"] || row["brand"] || "Unknown",
-                                modelName: row["MODEL NAME"] || row["modelName"] || "Unnamed Kit",
-                                size: row["GRADE"] || row["size"] || "N/A",
-                                units: parseInt(row["QTY"] || row["units"]) || 1,
-                                price: parseFloat(row["PRICE"] || row["price"]) || 0
-                            });
-                        } else {
-                            qmsv.push({
-                                brand: row["SERIES"] || row["brand"] || "Unknown",
-                                modelName: row["NAME"] || row["modelName"] || "Unnamed Figure",
-                                size: "N/A", // Column removed
-                                units: parseInt(row["QTY"] || row["units"]) || 1
-                            });
-                        }
-                        importCount++;
+                        const entry = {
+                            brand: row.BRAND || row.SERIES || row.brand || "Unknown",
+                            modelName: row["MODEL NAME"] || row.NAME || row.modelName || row.name || "Unnamed",
+                            size: row.GRADE || row.size || "N/A",
+                            units: parseInt(row.QTY || row.units) || 1,
+                            price: parseFloat(row.PRICE || row.price) || 0
+                        };
+                        if (type === 'backlog') backlog.push(entry); else qmsv.push(entry);
                     });
-
-                    saveLocally();
+                    saveAndSync();
                     showPage(type === 'backlog' ? 'list' : 'qmsv');
-                    window.showMessage(`Imported ${importCount} entries.`);
-                    event.target.value = ""; // Reset input
-                } catch (err) {
-                    console.error(err);
-                    window.showMessage("Failed to parse Excel file.");
-                }
+                    showMessage(`Imported ${json.length} items and synced`);
+                } catch(err) { showMessage("Error importing file"); }
             };
             reader.readAsArrayBuffer(file);
         }
 
         window.openSyncModal = () => document.getElementById('sync-modal').classList.remove('hidden');
         window.closeSyncModal = () => document.getElementById('sync-modal').classList.add('hidden');
-        
-        // Initial load
+
         renderBacklog();
     </script>
 </body>
