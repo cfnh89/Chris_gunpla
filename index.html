@@ -163,6 +163,18 @@
         </button>
     </div>
 
+    <!-- Error/Notice Panel for Unauthorized Domain -->
+    <div id="domain-notice" class="hidden fixed top-20 right-4 z-[50] max-w-sm glass-panel p-4 border-l-4 border-orange-500 rounded shadow-lg animate-pulse">
+        <p class="text-xs font-bold text-orange-800 mb-2">DOMAIN NOT AUTHORIZED</p>
+        <p class="text-[10px] text-gray-600 leading-relaxed mb-3">
+            Google Login is blocked because this sandbox domain is not in your Firebase Authorized Domains list.
+        </p>
+        <button id="copy-domain-btn" class="w-full py-2 bg-orange-100 text-orange-800 text-[10px] font-bold rounded hover:bg-orange-200 transition-colors uppercase">
+            Copy Domain for Whitelist
+        </button>
+        <button onclick="document.getElementById('domain-notice').remove()" class="w-full mt-2 py-1 text-[9px] text-gray-400 hover:text-gray-600">Dismiss</button>
+    </div>
+
     <div id="app" class="max-w-4xl mx-auto relative pb-20">
         <header class="mb-12 text-center relative py-6">
             <div class="corner-accent top-left"></div>
@@ -182,6 +194,7 @@
             </button>
         </div>
 
+        <!-- Pages -->
         <div id="page-list" class="page hidden">
             <div class="flex flex-wrap items-center justify-between gap-3 mb-4 px-2">
                 <div class="flex items-center gap-3">
@@ -345,7 +358,8 @@
             signInAnonymously, 
             onAuthStateChanged, 
             GoogleAuthProvider, 
-            signInWithPopup, 
+            signInWithRedirect,
+            getRedirectResult,
             signOut 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { 
@@ -355,6 +369,9 @@
             onSnapshot 
         } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
+        // Global state
+        let isAuthProcessing = false;
+
         // Firebase Config
         const firebaseConfig = JSON.parse(__firebase_config);
         const app = initializeApp(firebaseConfig);
@@ -362,26 +379,45 @@
         const db = getFirestore(app);
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
-        // Auth Logic - Wrapped to ensure it handles popup blocker environment
+        // Helper to copy domain
+        const setupDomainHelp = () => {
+            const copyBtn = document.getElementById('copy-domain-btn');
+            if (copyBtn) {
+                copyBtn.onclick = () => {
+                    const domain = window.location.hostname;
+                    const el = document.createElement('textarea');
+                    el.value = domain;
+                    document.body.appendChild(el);
+                    el.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(el);
+                    window.showMessage("Domain copied to clipboard!");
+                };
+            }
+        };
+
+        // Auth Logic
         window.handleGoogleLogin = async () => {
+            if (isAuthProcessing) return;
+            isAuthProcessing = true;
+            
             const provider = new GoogleAuthProvider();
-            // Force prompt to ensure the account picker shows
             provider.setCustomParameters({ prompt: 'select_account' });
             
             try {
-                const result = await signInWithPopup(auth, provider);
-                if (result.user) {
-                    showMessage(`Logged in as ${result.user.displayName}`);
-                }
+                // If it fails with unauthorized domain, we catch it here
+                await signInWithRedirect(auth, provider);
             } catch (error) {
                 console.error("Login Error:", error);
-                if (error.code === 'auth/popup-blocked') {
-                    alert("Please allow popups for this site to sign in with Google.");
-                } else if (error.code === 'auth/cancelled-popup-request') {
-                    // Handled internally
+                if (error.code === 'auth/unauthorized-domain') {
+                    document.getElementById('domain-notice').classList.remove('hidden');
+                    window.showMessage("Domain Error: Authenticating as Guest instead.");
+                    // Fallback to anonymous so app still works
+                    await signInAnonymously(auth);
                 } else {
-                    showMessage("Login Failed: " + error.message);
+                    window.showMessage(`Auth error: ${error.code}`);
                 }
+                isAuthProcessing = false;
             }
         };
 
@@ -389,24 +425,43 @@
             try {
                 await signOut(auth);
                 await signInAnonymously(auth);
-                showMessage("Signed out.");
+                window.showMessage("Signed out. Guest session started.");
             } catch (error) {
                 console.error("Logout Error:", error);
             }
         };
 
+        // Initialize Authentication
         const initAuth = async () => {
             try {
+                setupDomainHelp();
+                
+                // Handle redirect result
+                try {
+                    const result = await getRedirectResult(auth);
+                    if (result?.user) {
+                        window.showMessage(`Welcome back, ${result.user.displayName}`);
+                    }
+                } catch (err) {
+                    if (err.code === 'auth/unauthorized-domain') {
+                        console.warn("Domain not authorized for Google Sign-In.");
+                        document.getElementById('domain-notice').classList.remove('hidden');
+                    }
+                }
+
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    if (!auth.currentUser) await signInAnonymously(auth);
+                } else if (!auth.currentUser) {
+                    await signInAnonymously(auth);
                 }
             } catch (e) {
-                console.warn("Auth initialization warning", e);
+                console.error("Critical Auth failure", e);
+            } finally {
+                isAuthProcessing = false;
             }
         };
-        initAuth();
+        
+        window.addEventListener('load', initAuth);
 
         onAuthStateChanged(auth, (user) => {
             const loginBtn = document.getElementById('login-btn');
@@ -415,6 +470,7 @@
             if (user && !user.isAnonymous) {
                 loginBtn.classList.add('hidden');
                 userProfile.classList.remove('hidden');
+                document.getElementById('domain-notice').classList.add('hidden');
                 
                 const displayName = user.displayName || 'PILOT';
                 const firstName = displayName.split(' ')[0].toUpperCase();
@@ -429,16 +485,16 @@
                     email: user.email,
                     photo: user.photoURL,
                     lastSeen: new Date().toISOString()
-                }, { merge: true }).catch(err => console.error("Profile save error:", err));
+                }, { merge: true }).catch(err => {
+                    // This might happen if user isn't in DB yet or permissions fail
+                    console.log("Profile sync delayed:", err.code);
+                });
             } else {
                 loginBtn.classList.remove('hidden');
                 userProfile.classList.add('hidden');
             }
-        }, (error) => {
-            console.error("Auth State Error:", error);
         });
 
-        // Global message function
         window.showMessage = (text) => {
             const box = document.getElementById('msg-box');
             if (!box) return;
@@ -446,10 +502,11 @@
             if (textEl) textEl.innerText = `[SYSTEM]: ${text}`;
             box.style.transform = 'translateY(0)';
             setTimeout(() => { box.style.transform = 'translateY(150%)'; }, 3000);
-        }
+        };
     </script>
 
     <script>
+        // Data logic - Keep LocalStorage as local cache
         let backlog = JSON.parse(localStorage.getItem('gunpla_backlog')) || [
             { brand: 'Bandai', modelName: 'RG Hi-Nu Gundam', size: '1/144', units: 1, price: 185.00 },
             { brand: 'Bandai', modelName: 'MG Wing Zero Ver.Ka', size: '1/100', units: 1, price: 230.00 }
@@ -507,8 +564,7 @@
 
             if (type === 'backlog') {
                 fTitle.innerText = "Backlog Registry";
-                fTitle.classList.add('border-red-600', 'text-red-600');
-                fTitle.classList.remove('border-purple-600', 'text-purple-600');
+                fTitle.className = "text-xl mb-8 border-l-4 pl-4 uppercase tracking-tighter border-red-600 text-red-600";
                 bLabel.innerText = "BRAND";
                 sLabel.innerText = "GRADE / SIZE";
                 pField.style.display = 'block';
@@ -516,8 +572,7 @@
                 sBtn.style.backgroundColor = 'var(--gundam-red)';
             } else {
                 fTitle.innerText = "QMSV Registry";
-                fTitle.classList.add('border-purple-600', 'text-purple-600');
-                fTitle.classList.remove('border-red-600', 'text-red-600');
+                fTitle.className = "text-xl mb-8 border-l-4 pl-4 uppercase tracking-tighter border-purple-600 text-purple-600";
                 bLabel.innerText = "SERIES";
                 sLabel.innerText = "TYPE (COMMON/SECRET)";
                 pField.style.display = 'none';
@@ -567,7 +622,7 @@
                 tfoot.classList.add('hidden');
                 tbody.innerHTML = `<tr><td colspan="7" class="text-center py-10 text-gray-400 uppercase text-xs tracking-widest">No Operational Units</td></tr>`;
             }
-            countHeader.innerText = `${totalUnits} UNITS`;
+            if (countHeader) countHeader.innerText = `${totalUnits} UNITS`;
         }
 
         function renderQMSV() {
@@ -579,7 +634,7 @@
             let total = 0;
 
             if (qmsv.length > 0) {
-                empty.classList.add('hidden');
+                if (empty) empty.classList.add('hidden');
                 qmsv.forEach((kit, index) => {
                     total += parseInt(kit.units);
                     tbody.innerHTML += `
@@ -599,14 +654,14 @@
                     `;
                 });
             } else {
-                empty.classList.remove('hidden');
+                if (empty) empty.classList.remove('hidden');
             }
-            countHeader.innerText = `${total} FIGURES`;
+            if (countHeader) countHeader.innerText = `${total} FIGURES`;
         }
 
         function sortData(type, prop) {
             const list = (type === 'backlog' ? backlog : qmsv);
-            list.sort((a, b) => String(a[prop] || a['series']).toLowerCase().localeCompare(String(b[prop] || b['series']).toLowerCase()));
+            list.sort((a, b) => String(a[prop] || a['series'] || '').toLowerCase().localeCompare(String(b[prop] || b['series'] || '').toLowerCase()));
             saveAll();
             type === 'backlog' ? renderBacklog() : renderQMSV();
             if (window.showMessage) window.showMessage(`Sorted ${type} by ${prop}`);
@@ -616,10 +671,10 @@
             const item = (type === 'backlog' ? backlog[index] : qmsv[index]);
             document.getElementById('edit-type').value = type;
             document.getElementById('edit-index').value = index;
-            document.getElementById('edit-brand').value = item.brand || item.series;
-            document.getElementById('edit-modelName').value = item.modelName;
-            document.getElementById('edit-size').value = item.size || item.type;
-            document.getElementById('edit-units').value = item.units;
+            document.getElementById('edit-brand').value = item.brand || item.series || '';
+            document.getElementById('edit-modelName').value = item.modelName || '';
+            document.getElementById('edit-size').value = item.size || item.type || '';
+            document.getElementById('edit-units').value = item.units || 1;
             document.getElementById('edit-price').value = item.price || 0;
             
             document.getElementById('edit-price-field').style.display = (type === 'backlog' ? 'block' : 'none');
@@ -683,7 +738,9 @@
             localStorage.setItem('qmsv_collection', JSON.stringify(qmsv));
         }
 
-        window.onload = () => showPage('list');
+        window.addEventListener('DOMContentLoaded', () => {
+            showPage('list');
+        });
     </script>
 </body>
 </html>
